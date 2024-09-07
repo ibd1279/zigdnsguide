@@ -790,4 +790,4 @@ Answer: google.com. 62 IN a 216.58.214.78:0
 
 We have created all the parts necessary for reading DNS packets. Luckily, DNS uses the same packet format for writing. That allows us to jump into writing the query packet to a socket in the [next chapter](./Chapter02.md).
 
-[Full source](../src/Chapter01.zig) of this chapter.
+[Full source](../src/chapter01.zig) of this chapter.
