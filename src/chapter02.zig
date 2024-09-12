@@ -610,7 +610,7 @@ const Record = struct {
 
         // I'd rather be accurate to what was written than to what was
         // on the structure.
-        try buffer.setU16(size_pos, @truncate(buffer.pos - size_pos));
+        try buffer.setU16(size_pos, @truncate(buffer.pos - size_pos - 2));
     }
 
     pub fn format(

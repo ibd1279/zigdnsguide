@@ -448,13 +448,15 @@ const Record = struct {
 
         // I'd rather be accurate to what was written than to what was
         // on the structure.
-        try buffer.setU16(size_pos, @truncate(buffer.pos - size_pos));
+        try buffer.setU16(size_pos, @truncate(buffer.pos - size_pos - 2));
     }
 
 		-- snip --
 
 };
 ```
+
+The `data_len` value does not include the short written for the length. Because we are using the `size_pos`, which is the location of the short we’re writing for the length, we have to remove the length of the short from the value we are writing.
 
 For record data, it looks like the reverse of the read method, with a big switch to get around the static dispatch.
 
