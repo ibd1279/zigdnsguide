@@ -569,8 +569,9 @@ const Record = struct {
     data_len: u16,
     data: RecordData,
 
-    // release the mory used by the name.
+    // release the mory used by the Record.
     fn deinit(self: *const Record, alloc: std.mem.Allocator) void {
+        self.data.deinit(alloc);
         alloc.free(self.name);
     }
 
@@ -580,7 +581,7 @@ const Record = struct {
         const class = try buffer.readU16(); // Class is always 1
         const ttl = try buffer.readU32();
         const data_len = try buffer.readU16();
-        const data = try RecordData.read(rtype, data_len, buffer);
+        const data = try RecordData.read(alloc, rtype, data_len, buffer);
 
         // Copy the string to newly allocated memory.
         var name_list = std.ArrayList(u8).init(alloc);
@@ -633,7 +634,14 @@ const RecordData = union(QueryType) {
         addr: std.net.Ip4Address,
     },
 
-    fn read(rt: u16, data_len: u16, buffer: *BytePacketBuffer) !RecordData {
+    // release the mory used by the name.
+    fn deinit(self: *const RecordData, _: std.mem.Allocator) void {
+        switch (self) {
+            else => {},
+        }
+    }
+
+    fn read(_: std.mem.Allocator, rt: u16, data_len: u16, buffer: *BytePacketBuffer) !RecordData {
         const rtype = QueryType.fromNum(rt);
         switch (rtype) {
             QueryType.a => {

@@ -76,8 +76,9 @@ const Record = struct {
     data_len: u16,
     data: RecordData,
 
-    // release the mory used by the name.
+    // release the mory used by the Record.
     fn deinit(self: *const Record, alloc: std.mem.Allocator) void {
+        self.data.deinit(alloc);
         alloc.free(self.name);
     }
 
@@ -87,7 +88,7 @@ const Record = struct {
         const class = try buffer.readU16(); // Class is always 1
         const ttl = try buffer.readU32();
         const data_len = try buffer.readU16();
-        const data = try RecordData.read(rtype, data_len, buffer);
+        const data = try RecordData.read(alloc, rtype, data_len, buffer);
 
         // Copy the string to newly allocated memory.
         var name_list = std.ArrayList(u8).init(alloc);
@@ -119,6 +120,86 @@ const Record = struct {
     }
 };
 ```
+
+The `RecordData.Read` signature also needs to change, since we are now calling it with an allocator:
+
+```zig
+/// RecordData is a enum tagged union for each of the DNS types.
+const RecordData = union(QueryType) {
+    unknown: struct {},
+    a: struct {
+        addr: std.net.Ip4Address,
+    },
+
+    // release the mory used by the name.
+    fn deinit(self: *const RecordData, _: std.mem.Allocator) void {
+        switch (self) {
+            else => {},
+        }
+    }
+
+    fn read(_: std.mem.Allocator, rt: u16, data_len: u16, buffer: *BytePacketBuffer) !RecordData {
+        const rtype = QueryType.fromNum(rt);
+        switch (rtype) {
+            QueryType.a => {
+                var addr_raw = [_]u8{ 0, 0, 0, 0 };
+                addr_raw[0] = try buffer.read();
+                addr_raw[1] = try buffer.read();
+                addr_raw[2] = try buffer.read();
+                addr_raw[3] = try buffer.read();
+                const addr = std.net.Ip4Address.init(addr_raw, 0);
+
+                return .{ .a = .{
+                    .addr = addr,
+                } };
+            },
+            QueryType.unknown => {
+                // skip over the unknow data
+                try buffer.step(data_len);
+                return .{ .unknown = .{} };
+            },
+        }
+    }
+
+    pub fn write(self: *const RecordData, buffer: *BytePacketBuffer) !void {
+        switch (self.*) {
+            .a => |r| {
+                const octets = @as(*const [4]u8, @ptrCast(&r.addr.sa.addr));
+                try buffer.write(octets[0]);
+                try buffer.write(octets[1]);
+                try buffer.write(octets[2]);
+                try buffer.write(octets[3]);
+            },
+            .unknown => |r| {
+                // Skipping the unknown records for now but this will mess up the header counts.
+                std.debug.print("Skipping records: {}\n", .{r});
+            },
+        }
+    }
+
+    pub fn format(
+        self: RecordData,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        // blind reads so the compiler doesn't complain about unused parameters.
+        _ = fmt;
+        _ = options;
+
+        switch (self) {
+            .a => |r| {
+                try writer.print("{}", .{r.addr});
+            },
+            .unknown => {
+                try writer.print("{s}", .{"unknown"});
+            },
+        }
+    }
+};
+```
+
+I’ve pasted the whole structure here, but we really only change two small things. We add added the `deinit` method that does nothing yet, and the `_: std.mem.Allocator` parameter on `read`. `RecordData` doesn’t use the allocator yet, so we give the parameter an underscore (`_`) name. This prevents the Zig compiler from complaining about a parameter we never use.
 
 Once those are done, we have to update the `Packet` type to release the memory and share the allocator.
 
@@ -536,7 +617,7 @@ There is a lot of code there, but most of it is outputting the query and the ans
 
 This has an affect on the Socket creation as well:
 
-```
+```zig
     const socket = try std.posix.socket(server.any.family, std.posix.SOCK.DGRAM, 0);
     defer std.posix.close(socket);
     try std.posix.connect(socket, &server.any, server.getOsSockLen());
@@ -557,6 +638,6 @@ Question: google.com. IN a
 Answer: google.com. 256 IN a 142.250.179.78:0
 ```
 
-We can now move on to [Chapter 3](./Chapter03.md), where we add more types to the `RecordData` tagged union. We’ll also implement a simple trie to support writing names that jump around.
+We can now move on to [Chapter 3](./Chapter03.md), where we add more types to the `RecordData` tagged union. We’ll also implement a simple [trie](https://en.wikipedia.org/wiki/Trie) to support writing names that jump around.
 
 [Full source](../src/chapter02.zig) of this chapter.
