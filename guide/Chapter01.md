@@ -573,7 +573,7 @@ const Record = struct {
     data: RecordData,
 
     fn read(buffer: *BytePacketBuffer) !Record {
-        const name = try buffer.readLabelreadLabelIterator();
+        const name = try buffer.readLabelIterator();
         const rtype = try buffer.readU16();
         const class = try buffer.readU16(); // Class is always 1
         const ttl = try buffer.readU32();
